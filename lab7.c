@@ -89,7 +89,11 @@ void bmpFile(struct stat fileInfo, char* pathName, char* fileName){
         close(sursa);
         exit(EXIT_FAILURE);
     }
-    if(access("statistica.txt",F_OK)==0){
+    
+    if(access("statistica.txt",F_OK)!=0)
+        creat("statistica.txt", 0777);
+    int destinatie = open("statistica.txt",O_WRONLY | O_APPEND);
+    
         printf("Verificati fisierul \"statistica.txt\" pentru detalii despre fisierul .bmp accesat.\n");
         //partea de citire din bmp, stocare si afisare in statistica.txt
         {
@@ -107,7 +111,7 @@ void bmpFile(struct stat fileInfo, char* pathName, char* fileName){
             int dimensiune, inaltime, latime;
 
             //deschidere si verificare deschidere statistica.txt
-            int destinatie = open("statistica.txt",O_WRONLY | O_APPEND);
+            
             if(destinatie == -1){
                 printf("Eroare la scriere.\n");
                 close(sursa);
@@ -170,11 +174,7 @@ void bmpFile(struct stat fileInfo, char* pathName, char* fileName){
             close(sursa);
             close(destinatie);
         }
-    }else{
-        printf("Fisierul nu exista.\n"); 
-        close(sursa);
-        exit(EXIT_FAILURE);       
-    }
+    
     close(sursa);
 }
 
@@ -219,9 +219,11 @@ int main(int argc, char *argv[]){
         if(strstr(file_path,".bmp") == NULL)
             //if regular file then
             regFile(file_info);
-        else
+        else{
             //if not regular file then (bmp)
+            printf("%s\n",entry->d_name);
             bmpFile(file_info, file_path, entry->d_name);
+        }
     }
 
     return 0;
