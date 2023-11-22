@@ -217,16 +217,6 @@ int main(int argc, char *argv[]){
             exit(EXIT_FAILURE);
         }
 
-        /*if(strstr(file_path,".bmp") == NULL)
-            //if regular file then
-            regFile(file_info);
-        
-
-        if(strstr(file_path,".bmp") != NULL)
-            //if not regular file then (bmp)
-            printf("%s\n",entry->d_name);
-            bmpFile(file_info, file_path, entry->d_name);*/
-
         if(S_ISLNK(file_info.st_mode)) {
             printf("%s is sym link\n",entry->d_name);
         } else if (S_ISDIR(file_info.st_mode)) {
