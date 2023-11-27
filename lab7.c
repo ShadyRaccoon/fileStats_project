@@ -1,10 +1,9 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <dirent.h>//afla st_ino, st_uid, st_mode
+#include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
@@ -13,52 +12,11 @@
 //f2 707
 //f3 007
 
-void regFile(struct stat fileInfo){
-    //user
-    if(fileInfo.st_mode & S_IRUSR)
-            printf("R");
-        else
-            printf("-");
-    if(fileInfo.st_mode & S_IWUSR)
-            printf("W");
-        else
-            printf("-");
-    if(fileInfo.st_mode & S_IXUSR)
-            printf("X-");
-        else
-            printf("--");
+void permisiuni(int fDest, struct stat fileInfo, char *usr,int r, int w, int x){
+    write(fDest, "Permisiuni ", strlen("Permisiuni "));
+    write(fDest, usr, strlen(usr));
+    write(fDest, ": ", strlen(": "));
 
-    //group
-    if(fileInfo.st_mode & S_IRGRP)
-            printf("R");
-        else
-            printf("-");
-    if(fileInfo.st_mode & S_IWGRP)
-            printf("W");
-        else
-            printf("-");
-    if(fileInfo.st_mode & S_IXGRP)
-            printf("X-");
-        else
-            printf("--");
-
-    //others
-    if(fileInfo.st_mode & S_IROTH)
-            printf("R");
-        else
-            printf("-");
-    if(fileInfo.st_mode & S_IWOTH)
-            printf("W");
-        else
-            printf("-");
-    if(fileInfo.st_mode & S_IXOTH)
-            printf("X");
-        else
-            printf("-");
-}
-
-void permisiuniBmp(int fDest, struct stat fileInfo, int r, int w, int x){
-    //user
     if(fileInfo.st_mode & r)
             write(fDest,"R",1);
         else
@@ -82,101 +40,95 @@ void printIntToFile(int fDest, int val, char *text){
     write(fDest,"\n",1);
 }
 
-void bmpFile(struct stat fileInfo, char* pathName, char* fileName){
-    //verific daca fisierul statistica.txt exista
-    int sursa = open(pathName,O_RDONLY);//deschidem fisierul pentru citire
+void printFileData(char *filePath, char* fileName, int fileTagNumber){
+    struct stat file_info, lfile_info;
+    
+    if(lstat(filePath, &lfile_info)==-1){
+        printf("EROARE LA PROCESAREA FISIERULUI.\n");
+        exit(EXIT_FAILURE);
+    }
+        
+    if(stat(filePath, &file_info)==-1){
+        printf("EROARE LA PROCESAREA FISIERULUI.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    //pregatire fisier statistica pentru printare
+    int sursa = open(filePath,O_RDONLY);//deschidem fisierul pentru citire
     if(sursa==-1){
         printf("Eroare la parcurgerea fisierului bmp.\n");
         close(sursa);
         exit(EXIT_FAILURE);
     }
-    
+
+    //verificam daca statistica exista
+    //daca nu, il cream
     if(access("statistica.txt",F_OK)!=0)
         creat("statistica.txt", 0777);
-    int destinatie = open("statistica.txt",O_WRONLY | O_APPEND);
+
+    int destinatie;
+    if((destinatie = open("statistica.txt",O_WRONLY | O_APPEND)) == -1){
+        printf("Eroare la deschiderea fisierului statistica.txt.\n");
+        close(destinatie);
+        exit(EXIT_FAILURE);
+    };
     
-        printf("Verificati fisierul \"statistica.txt\" pentru detalii despre fisierul .bmp accesat.\n");
-        //partea de citire din bmp, stocare si afisare in statistica.txt
-        {
-            /*
-                _inaltime: 1920                              //sare 4 bytes citeste 4 (3) 
-                _lungime: 1280                               //sare 12 bytes citeste 4 bytes (2)
-                _dimensiune: <dimensiune in octeti>          //sare 2 bytes citeste 4 bytes(1)
-                _identificatorul utilizatorului: <user id>   //st_uid in struct stat
-                _timpul ultimei modificari: 28.10.2023       //st_mtim in struct stat
-                contorul de legaturi: <numar legaturi>      //st_nlink in struct stat
-                _drepturi de acces user: RWX                 //refa functia de la reg file pentru bmp
-                _drepturi de acces grup: R–-                 //refa functia de la reg file pentru bmp
-                _drepturi de acces altii: ---                //refa functia de la reg file pentru bmp
-            */
-            int dimensiune, inaltime, latime;
+    printf("Verificati fisierul \"statistica.txt\" pentru detalii despre fisierul .bmp accesat.\n");
 
-            //deschidere si verificare deschidere statistica.txt
-            
-            if(destinatie == -1){
-                printf("Eroare la scriere.\n");
-                close(sursa);
-                exit(EXIT_FAILURE);
-            }
+    //printare nume - orice tip de fisier
+    char text[50] = "Numele fisierului: ";
+    write(destinatie,text,strlen(text));
+    write(destinatie,fileName,strlen(fileName));
+    write(destinatie,"\n",1);
 
-            char text[50] = "Numele fisierului: ";
-            write(destinatie,text,strlen(text));
-            write(destinatie,fileName,strlen(fileName));
-            write(destinatie,"\n",1);
+    //printare intaltime si lungime doar in cazul in care fileTagNumber e 4(BMP)
+    if(fileTagNumber == 4){
+        int lungime, inaltime;
+        lseek(sursa,18,SEEK_SET);
+        read(sursa,&lungime,4);
+        read(sursa,&inaltime,4);
+        printIntToFile(destinatie,inaltime,"Inaltimea fisierului: ");
+        printf("inaltime: %d\n",inaltime);
+        printIntToFile(destinatie,lungime,"Latimea fisierului: ");
+        printf("lungime: %d\n",lungime);
+    }
 
-            //skip la primii 2 bytes pentru a afla dimensiunea
-            lseek(sursa,2,SEEK_SET);
-            read(sursa,&dimensiune,4);
+    //printare dimensiune fisier din lstat in cazul in care nu e fileTagNumber 2(DIR)
+    //cu fd-ul dupa apelul lstat acoperim si dimensiunea symlnk-ului
+    if(fileTagNumber != 2){
+        strcpy(text,"Dimensiunea fisierului: ");
+        printIntToFile(destinatie,lfile_info.st_size,text);
+    }
 
-            //skip la urmatorii 12 bytes pentru a afla latimea
-            lseek(sursa,12,SEEK_CUR);
-            read(sursa,&latime,4);
+    //printare dimensiune fisier targetat din stat in cazul in care fileTagNumber e 1(SYMLNK)
+    if(fileTagNumber == 1){
+        strcpy(text,"Dimensiunea fisierului targetat: ");
+        printIntToFile(destinatie,file_info.st_size,text);
+    }
 
-            //skip la urmatorii 4 bytes pentru a afla lungimea
-            lseek(sursa,0,SEEK_CUR);
-            read(sursa,&inaltime,4);
+    //printare user_id in cazul in care fileTagNumber nu e 1(SYMLNK)
+    if(fileTagNumber != 1){
+        strcpy(text,"ID-ul user-ului : ");
+        printIntToFile(destinatie,file_info.st_uid,text);
+    }
 
-            strcpy(text,"Inaltimea fisierului: ");
-            printIntToFile(destinatie,inaltime,text);
-
-            strcpy(text,"Latimea fisierului: ");
-            printIntToFile(destinatie,latime,text);
-
-            strcpy(text,"Dimensiunea fisierului: ");
-            printIntToFile(destinatie,dimensiune,text);
-
-            //afisare user id
-            strcpy(text,"ID-ul user-ului : ");
-            printIntToFile(destinatie,fileInfo.st_uid,text);
-
-            strcpy(text,"Data ultimei modificari: ");
-            write(destinatie,text,strlen(text));
-            write(destinatie,ctime(&fileInfo.st_mtime),strlen(ctime(&fileInfo.st_mtime)));
-
-            //afisare contor de legaturi
-            strcpy(text,"Numarul de legaturi ale fisierului : ");
-            printIntToFile(destinatie,fileInfo.st_nlink,text);
-
-            strcpy(text,"Permisiuni user: ");
-            write(destinatie,text,strlen(text));
-            permisiuniBmp(destinatie, fileInfo, S_IRUSR, S_IWUSR, S_IXUSR);
-
-            strcpy(text,"Permisiuni group: ");
-            write(destinatie,text,strlen(text));
-            permisiuniBmp(destinatie, fileInfo, S_IRGRP, S_IRGRP, S_IXGRP);
-
-            strcpy(text,"Permisiuni others: ");
-            write(destinatie,text,strlen(text));
-            permisiuniBmp(destinatie, fileInfo, S_IROTH, S_IWOTH, S_IXOTH);
-
-            write(destinatie,"\n",1);
-            write(destinatie,"\n",1);
-
-            close(sursa);
-            close(destinatie);
-        }
-    
+    //printarea timpului ultimei accesari si contorului de legatura doar in cazul in care
+    //fileTagNumber e doar 3 sau 4(.BMP sau REG)
+    if(fileTagNumber == 3 || fileTagNumber == 4){
+        strcpy(text,"Data ultimei modificari: ");
+        write(destinatie,text,strlen(text));
+        write(destinatie,ctime(&lfile_info.st_mtime),strlen(ctime(&lfile_info.st_mtime)));
+        strcpy(text,"Numarul de legaturi ale fisierului : ");
+        printIntToFile(destinatie,file_info.st_nlink,text);
+    }
+    //printare drepturi de acces pentru orice tip de fisier
+    permisiuni(destinatie,lfile_info,"user",S_IRUSR, S_IWUSR, S_IXUSR);
+    permisiuni(destinatie,lfile_info,"group",S_IRGRP, S_IRGRP, S_IXGRP);
+    permisiuni(destinatie,lfile_info,"others",S_IROTH, S_IWOTH, S_IXOTH);
+    write(destinatie,"\n",1);
+    write(destinatie,"\n",1);
     close(sursa);
+    close(destinatie);
 }
 
 int main(int argc, char *argv[]){
@@ -198,36 +150,32 @@ int main(int argc, char *argv[]){
     struct dirent *entry;
     
     while((entry = readdir(dir_pointer))){
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
         //printam numele endtry.d_name -> file1
         printf("\n%s\n",entry->d_name);
-
         //filepath = trebuie formata calea relativa dir_name/file_name, ./file_name
         char file_path[100] = "";
         strcat(file_path,argv[1]);
         strcat(file_path,"/");
         strcat(file_path,entry->d_name);
-        
         //verificam tipul de file
         struct stat file_info;
-
-        
-        
         if(lstat(file_path, &file_info)==-1){
             printf("undefined behaviour\n");
             exit(EXIT_FAILURE);
         }
 
         if(S_ISLNK(file_info.st_mode)) {
-            printf("%s is sym link\n",entry->d_name);
+            printFileData(file_path,entry->d_name,1);
         } else if (S_ISDIR(file_info.st_mode)) {
-            printf("%s is dir\n",entry->d_name);
-        } else if (S_ISREG(file_info.st_mode)) {
-            regFile(file_info);
-        } else if (strstr(file_path, ".bmp") != NULL) {
-            bmpFile(file_info, file_path, entry->d_name);
+            printFileData(file_path,entry->d_name,2);
+        } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") == NULL) {
+            printFileData(file_path,entry->d_name,3);
+        } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL) {
+            printFileData(file_path,entry->d_name,4);
         }
-        
     }
-
     return 0;
 }
