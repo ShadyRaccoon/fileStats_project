@@ -8,10 +8,6 @@
 #include <unistd.h>
 #include <time.h>
 
-//f1 770
-//f2 707
-//f3 007
-
 void permisiuni(int fDest, struct stat fileInfo, char *usr,int r, int w, int x){
     write(fDest, "Permisiuni ", strlen("Permisiuni "));
     write(fDest, usr, strlen(usr));
@@ -40,19 +36,26 @@ void printIntToFile(int fDest, int val, char *text){
     write(fDest,"\n",1);
 }
 
-void printFileData(char *filePath, char* fileName, int fileTagNumber){
+void printFileData(char *filePath, char *outputFile_path, char* fileName, int fileTagNumber){
+    if(access(outputFile_path, F_OK) != 0)
+        creat(outputFile_path, 0777);
+
+    int destinatie;
+    if((destinatie = open(outputFile_path, O_WRONLY | O_APPEND)) == -1){
+        printf("Eroare la deschiderea fisierului %s.\n", outputFile_path);
+        close(destinatie);
+        exit(EXIT_FAILURE);
+    }
+
     struct stat file_info, lfile_info;
-    
     if(lstat(filePath, &lfile_info)==-1){
         printf("EROARE LA PROCESAREA FISIERULUI.\n");
         exit(EXIT_FAILURE);
-    }
-        
+    }   
     if(stat(filePath, &file_info)==-1){
         printf("EROARE LA PROCESAREA FISIERULUI.\n");
         exit(EXIT_FAILURE);
     }
-
     //pregatire fisier statistica pentru printare
     int sursa = open(filePath,O_RDONLY);//deschidem fisierul pentru citire
     if(sursa==-1){
@@ -60,27 +63,13 @@ void printFileData(char *filePath, char* fileName, int fileTagNumber){
         close(sursa);
         exit(EXIT_FAILURE);
     }
-
-    //verificam daca statistica exista
-    //daca nu, il cream
-    if(access("statistica.txt",F_OK)!=0)
-        creat("statistica.txt", 0777);
-
-    int destinatie;
-    if((destinatie = open("statistica.txt",O_WRONLY | O_APPEND)) == -1){
-        printf("Eroare la deschiderea fisierului statistica.txt.\n");
-        close(destinatie);
-        exit(EXIT_FAILURE);
-    };
     
-    printf("Verificati fisierul \"statistica.txt\" pentru detalii despre fisierul .bmp accesat.\n");
-
+    printf("Verificati fisierul %s pentru detalii despre fisierul %s.\n",outputFile_path,filePath);
     //printare nume - orice tip de fisier
     char text[50] = "Numele fisierului: ";
     write(destinatie,text,strlen(text));
     write(destinatie,fileName,strlen(fileName));
     write(destinatie,"\n",1);
-
     //printare intaltime si lungime doar in cazul in care fileTagNumber e 4(BMP)
     if(fileTagNumber == 4){
         int lungime, inaltime;
@@ -88,30 +77,24 @@ void printFileData(char *filePath, char* fileName, int fileTagNumber){
         read(sursa,&lungime,4);
         read(sursa,&inaltime,4);
         printIntToFile(destinatie,inaltime,"Inaltimea fisierului: ");
-        printf("inaltime: %d\n",inaltime);
         printIntToFile(destinatie,lungime,"Latimea fisierului: ");
-        printf("lungime: %d\n",lungime);
     }
-
     //printare dimensiune fisier din lstat in cazul in care nu e fileTagNumber 2(DIR)
     //cu fd-ul dupa apelul lstat acoperim si dimensiunea symlnk-ului
     if(fileTagNumber != 2){
         strcpy(text,"Dimensiunea fisierului: ");
         printIntToFile(destinatie,lfile_info.st_size,text);
     }
-
     //printare dimensiune fisier targetat din stat in cazul in care fileTagNumber e 1(SYMLNK)
     if(fileTagNumber == 1){
         strcpy(text,"Dimensiunea fisierului targetat: ");
         printIntToFile(destinatie,file_info.st_size,text);
     }
-
     //printare user_id in cazul in care fileTagNumber nu e 1(SYMLNK)
     if(fileTagNumber != 1){
         strcpy(text,"ID-ul user-ului : ");
         printIntToFile(destinatie,file_info.st_uid,text);
     }
-
     //printarea timpului ultimei accesari si contorului de legatura doar in cazul in care
     //fileTagNumber e doar 3 sau 4(.BMP sau REG)
     if(fileTagNumber == 3 || fileTagNumber == 4){
@@ -125,42 +108,46 @@ void printFileData(char *filePath, char* fileName, int fileTagNumber){
     permisiuni(destinatie,lfile_info,"user",S_IRUSR, S_IWUSR, S_IXUSR);
     permisiuni(destinatie,lfile_info,"group",S_IRGRP, S_IRGRP, S_IXGRP);
     permisiuni(destinatie,lfile_info,"others",S_IROTH, S_IWOTH, S_IXOTH);
-    write(destinatie,"\n",1);
-    write(destinatie,"\n",1);
     close(sursa);
     close(destinatie);
 }
 
 int main(int argc, char *argv[]){
-    //verif nr de arg primite
-    if(argc!=2){
+    if(argc!=3){
         printf("Numar nepotrivit de argumente!\n");
         exit(EXIT_FAILURE);
     }
-    
-    DIR *dir_pointer = opendir(argv[1]);
-    
-    //verificare daca este null
-    if(dir_pointer == NULL){
-        printf("EROARE LA DESCHIDEREA DIRECTORULUI DAT.\n");
+
+    DIR *dir_citire = opendir(argv[1]);
+    DIR *dir_scriere = opendir(argv[1]);
+    if(dir_citire == NULL){
+        printf("EROARE LA DESCHIDEREA DIRECTORULUI DAT PENTRU CITIRE.\n");
         exit(EXIT_FAILURE);
     }
-    
-    //daca nu, continuam
+    if(dir_scriere == NULL){
+        printf("EROARE LA DESCHIDEREA DIRECTORULUI DAT PENTRU SCRIERE.\n");
+        exit(EXIT_FAILURE);
+    }
+
     struct dirent *entry;
-    
-    while((entry = readdir(dir_pointer))){
+    while((entry = readdir(dir_citire))){
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
-        //printam numele endtry.d_name -> file1
+        //printam numele endtry.d_name la stdout
         printf("\n%s\n",entry->d_name);
         //filepath = trebuie formata calea relativa dir_name/file_name, ./file_name
         char file_path[100] = "";
         strcat(file_path,argv[1]);
         strcat(file_path,"/");
         strcat(file_path,entry->d_name);
-        //verificam tipul de file
+
+        char outputFile_path[100] = "";
+        strcat(outputFile_path,argv[2]);
+        strcat(outputFile_path,"/");
+        strcat(outputFile_path,entry->d_name);
+        strcat(outputFile_path,".statistica.txt");
+        
         struct stat file_info;
         if(lstat(file_path, &file_info)==-1){
             printf("undefined behaviour\n");
@@ -168,13 +155,30 @@ int main(int argc, char *argv[]){
         }
 
         if(S_ISLNK(file_info.st_mode)) {
-            printFileData(file_path,entry->d_name,1);
+            //proces pentru printare 
+            printFileData(file_path,outputFile_path,entry->d_name,1);
+            //proces pentru modificare imagine 
+
+            //proces pentru scriere in statistica.txt cate linii s-au 
+            //scris despre fiecare fisier accesat
         } else if (S_ISDIR(file_info.st_mode)) {
-            printFileData(file_path,entry->d_name,2);
+            //proces pentru printare
+            printFileData(file_path,outputFile_path,entry->d_name,2);
+
+            //proces pentru scriere in statistica.txt cate linii s-au 
+            //scris despre fiecare fisier accesat
         } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") == NULL) {
-            printFileData(file_path,entry->d_name,3);
+            //proces pentru printare
+            printFileData(file_path,outputFile_path,entry->d_name,3);
+
+            //proces pentru scriere in statistica.txt cate linii s-au 
+            //scris despre fiecare fisier accesat
         } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL) {
-            printFileData(file_path,entry->d_name,4);
+            //proces pentru printare
+            printFileData(file_path,outputFile_path,entry->d_name,4);
+
+            //proces pentru scriere in statistica.txt cate linii s-au 
+            //scris despre fiecare fisier accesat
         }
     }
     return 0;
