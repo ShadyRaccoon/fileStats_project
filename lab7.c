@@ -130,6 +130,30 @@ void printNumarLinii(int n, char *filePath){
     write(destinatie,a,strlen(a));
 }
 
+void greyTones(char *filePath) {
+    int sursa = open(filePath, O_RDWR); 
+    if(sursa == -1) {
+        printf("Error opening file.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    lseek(sursa, 54, SEEK_SET);
+    //aveam nevoie de un tip de un byte care era pozitiv
+    unsigned char red, green, blue;
+    while(1) {
+        read(sursa, &blue, 1);
+        read(sursa, &green, 1);
+        read(sursa, &red, 1);
+        unsigned char gray = (unsigned char)(0.299 * red + 0.587 * green + 0.114 * blue);
+        lseek(sursa, -3, SEEK_CUR);
+        write(sursa, &gray, 1);
+        write(sursa, &gray, 1);
+        write(sursa, &gray, 1);
+    }
+    close(sursa);
+}
+
+
 int main(int argc, char *argv[]){
     if(argc!=3){
         printf("Numar nepotrivit de argumente!\n");
@@ -189,10 +213,24 @@ int main(int argc, char *argv[]){
             } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL) {
                 printFileData(file_path,outputFile_path,entry->d_name,4);
                 printNumarLinii(10,file_path);
+                greyTones(file_path);
             }
+
 
             //inchidere proces
             exit(0);
+
+            //proces pentru greyscale
+            if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL && f_id!=0){
+                int f_id1 = fork();
+                if(f_id1 == -1){
+                    printf("EROARE.");
+                    exit(EXIT_FAILURE); 
+                }else if(f_id1 == 0){
+                    greyTones(file_path);
+                    exit(0);
+                }
+            }
         }
     }
     wait(NULL);
