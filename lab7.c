@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/wait.h>
 
 void permisiuni(int fDest, struct stat fileInfo, char *usr,int r, int w, int x){
     write(fDest, "Permisiuni ", strlen("Permisiuni "));
@@ -112,6 +113,23 @@ void printFileData(char *filePath, char *outputFile_path, char* fileName, int fi
     close(destinatie);
 }
 
+void printNumarLinii(int n, char *filePath){
+    int destinatie;
+    if((destinatie = open("statistica.txt", O_WRONLY | O_APPEND)) == -1){
+        printf("Eroare la deschiderea fisierului %s.\n", "statistica.txt");
+        close(destinatie);
+        exit(EXIT_FAILURE);
+    }
+    char arr[5];
+    sprintf(arr,"%d",n);
+    char a[250] = "S-au scris ";
+    strcat(a, arr);
+    strcat(a, " linii despre fisierul ");
+    strcat(a, filePath);
+    strcat(a, ".\n");
+    write(destinatie,a,strlen(a));
+}
+
 int main(int argc, char *argv[]){
     if(argc!=3){
         printf("Numar nepotrivit de argumente!\n");
@@ -154,32 +172,29 @@ int main(int argc, char *argv[]){
             exit(EXIT_FAILURE);
         }
 
-        if(S_ISLNK(file_info.st_mode)) {
-            //proces pentru printare 
-            printFileData(file_path,outputFile_path,entry->d_name,1);
-            //proces pentru modificare imagine 
+        int f_id = fork();
+        if(f_id == -1){
+            printf("EROARE.");
+            exit(EXIT_FAILURE); 
+        }else if(f_id == 0){
+            if(S_ISLNK(file_info.st_mode)) {
+                printFileData(file_path,outputFile_path,entry->d_name,1);
+                printNumarLinii(6,file_path);
+            } else if (S_ISDIR(file_info.st_mode)) {
+                printFileData(file_path,outputFile_path,entry->d_name,2);
+                printNumarLinii(5,file_path); 
+            } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") == NULL) {
+                printFileData(file_path,outputFile_path,entry->d_name,3);
+                printNumarLinii(8,file_path);
+            } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL) {
+                printFileData(file_path,outputFile_path,entry->d_name,4);
+                printNumarLinii(10,file_path);
+            }
 
-            //proces pentru scriere in statistica.txt cate linii s-au 
-            //scris despre fiecare fisier accesat
-        } else if (S_ISDIR(file_info.st_mode)) {
-            //proces pentru printare
-            printFileData(file_path,outputFile_path,entry->d_name,2);
-
-            //proces pentru scriere in statistica.txt cate linii s-au 
-            //scris despre fiecare fisier accesat
-        } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") == NULL) {
-            //proces pentru printare
-            printFileData(file_path,outputFile_path,entry->d_name,3);
-
-            //proces pentru scriere in statistica.txt cate linii s-au 
-            //scris despre fiecare fisier accesat
-        } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL) {
-            //proces pentru printare
-            printFileData(file_path,outputFile_path,entry->d_name,4);
-
-            //proces pentru scriere in statistica.txt cate linii s-au 
-            //scris despre fiecare fisier accesat
+            //inchidere proces
+            exit(0);
         }
     }
+    wait(NULL);
     return 0;
 }
