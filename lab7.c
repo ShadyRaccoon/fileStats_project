@@ -8,33 +8,76 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <ctype.h>
+
+//TO DO - FUNC TO CHECK READ
+void checkedRead(int fd, void *text, int size){
+        if(read(fd,text,size) == -1){
+            printf("EROARE LA CITIRE.\n");
+            exit(EXIT_FAILURE);
+        }
+}
+
+//TO DO - FUNC TO CHECK WRITE
+void checkedWrite(int fd, void *text, int size){
+        if(write(fd,text,size) == -1){
+            printf("EROARE LA CITIRE.\n");
+            exit(EXIT_FAILURE);
+        }
+}
+
+//TO DO - FUNC TO CHECK READDIR
+struct dirent * checkedReaddir(DIR *dirCitire){
+    struct dirent *dir = readdir(dirCitire);
+    if(dir == NULL && errno != 0){
+        printf("EROARE LA CITIREA DIN FISIER.\n");
+        exit(EXIT_FAILURE);
+    }
+    return dir;
+}
+
+//TO DO - FUNC TO CHECK CLOSE
+void checkedClose(int fd){
+    if(close(fd) == -1){
+        printf("EROARE LA INCHIDEREA FISIERULUI.\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+//TO DO - FUNC TO CHECK DUP2
+void checkedDup2(int nfd, int ofd){
+    if(dup2(ofd, nfd) == -1){
+        printf("EROARE LA REDIRECTARE.\n");
+        exit(EXIT_FAILURE);
+    }
+}
 
 void permisiuni(int fDest, struct stat fileInfo, char *usr,int r, int w, int x){
-    write(fDest, "Permisiuni ", strlen("Permisiuni "));
-    write(fDest, usr, strlen(usr));
-    write(fDest, ": ", strlen(": "));
+    checkedWrite(fDest, "Permisiuni ", strlen("Permisiuni "));
+    checkedWrite(fDest, usr, strlen(usr));
+    checkedWrite(fDest, ": ", strlen(": "));
 
     if(fileInfo.st_mode & r)
-            write(fDest,"R",1);
+            checkedWrite(fDest,"R",1);
         else
-            write(fDest,"-",1);
+            checkedWrite(fDest,"-",1);
     if(fileInfo.st_mode & w)
-            write(fDest,"W",1);
+            checkedWrite(fDest,"W",1);
         else
-            write(fDest,"-",1);
+            checkedWrite(fDest,"-",1);
     if(fileInfo.st_mode & x)
-            write(fDest,"X",1);
+            checkedWrite(fDest,"X",1);
         else
-            write(fDest,"-",1);
-    write(fDest,"\n",1);
+            checkedWrite(fDest,"-",1);
+    checkedWrite(fDest,"\n",1);
 }
 
 void printIntToFile(int fDest, int val, char *text){
     char arr[20];
     sprintf(arr,"%d",val);
-    write(fDest,text,strlen(text));
-    write(fDest,arr,strlen(arr));
-    write(fDest,"\n",1);
+    checkedWrite(fDest,text,strlen(text));
+    checkedWrite(fDest,arr,strlen(arr));
+    checkedWrite(fDest,"\n",1);
 }
 
 void printFileData(char *filePath, char *outputFile_path, char* fileName, int fileTagNumber){
@@ -42,9 +85,9 @@ void printFileData(char *filePath, char *outputFile_path, char* fileName, int fi
         creat(outputFile_path, 0777);
 
     int destinatie;
-    if((destinatie = open(outputFile_path, O_WRONLY | O_APPEND)) == -1){
+    if((destinatie = open(outputFile_path, O_WRONLY)) == -1){
         printf("Eroare la deschiderea fisierului %s.\n", outputFile_path);
-        close(destinatie);
+        checkedClose(destinatie);
         exit(EXIT_FAILURE);
     }
 
@@ -61,22 +104,22 @@ void printFileData(char *filePath, char *outputFile_path, char* fileName, int fi
     int sursa = open(filePath,O_RDONLY);//deschidem fisierul pentru citire
     if(sursa==-1){
         printf("Eroare la parcurgerea fisierului bmp.\n");
-        close(sursa);
+        checkedClose(sursa);
         exit(EXIT_FAILURE);
     }
     
     printf("Verificati fisierul %s pentru detalii despre fisierul %s.\n",outputFile_path,filePath);
     //printare nume - orice tip de fisier
     char text[50] = "Numele fisierului: ";
-    write(destinatie,text,strlen(text));
-    write(destinatie,fileName,strlen(fileName));
-    write(destinatie,"\n",1);
+    checkedWrite(destinatie,text,strlen(text));
+    checkedWrite(destinatie,fileName,strlen(fileName));
+    checkedWrite(destinatie,"\n",1);
     //printare intaltime si lungime doar in cazul in care fileTagNumber e 4(BMP)
     if(fileTagNumber == 4){
         int lungime, inaltime;
         lseek(sursa,18,SEEK_SET);
-        read(sursa,&lungime,4);
-        read(sursa,&inaltime,4);
+        checkedRead(sursa,&lungime,4);
+        checkedRead(sursa,&inaltime,4);
         printIntToFile(destinatie,inaltime,"Inaltimea fisierului: ");
         printIntToFile(destinatie,lungime,"Latimea fisierului: ");
     }
@@ -100,8 +143,8 @@ void printFileData(char *filePath, char *outputFile_path, char* fileName, int fi
     //fileTagNumber e doar 3 sau 4(.BMP sau REG)
     if(fileTagNumber == 3 || fileTagNumber == 4){
         strcpy(text,"Data ultimei modificari: ");
-        write(destinatie,text,strlen(text));
-        write(destinatie,ctime(&lfile_info.st_mtime),strlen(ctime(&lfile_info.st_mtime)));
+        checkedWrite(destinatie,text,strlen(text));
+        checkedWrite(destinatie,ctime(&lfile_info.st_mtime),strlen(ctime(&lfile_info.st_mtime)));
         strcpy(text,"Numarul de legaturi ale fisierului : ");
         printIntToFile(destinatie,file_info.st_nlink,text);
     }
@@ -109,25 +152,8 @@ void printFileData(char *filePath, char *outputFile_path, char* fileName, int fi
     permisiuni(destinatie,lfile_info,"user",S_IRUSR, S_IWUSR, S_IXUSR);
     permisiuni(destinatie,lfile_info,"group",S_IRGRP, S_IRGRP, S_IXGRP);
     permisiuni(destinatie,lfile_info,"others",S_IROTH, S_IWOTH, S_IXOTH);
-    close(sursa);
-    close(destinatie);
-}
-
-void printNumarLinii(int n, char *filePath){
-    int destinatie;
-    if((destinatie = open("statistica.txt", O_WRONLY | O_APPEND)) == -1){
-        printf("Eroare la deschiderea fisierului %s.\n", "statistica.txt");
-        close(destinatie);
-        exit(EXIT_FAILURE);
-    }
-    char arr[5];
-    sprintf(arr,"%d",n);
-    char a[250] = "S-au scris ";
-    strcat(a, arr);
-    strcat(a, " linii despre fisierul ");
-    strcat(a, filePath);
-    strcat(a, ".\n");
-    write(destinatie,a,strlen(a));
+    checkedClose(sursa);
+    checkedClose(destinatie);
 }
 
 void greyTones(char *filePath) {
@@ -136,43 +162,61 @@ void greyTones(char *filePath) {
         printf("Error opening file.\n");
         exit(EXIT_FAILURE);
     }
+    lseek(sursa, 18, SEEK_SET);
+    int x, y, cnt = 0;
+    checkedRead(sursa, &x, sizeof(x));
+    checkedRead(sursa, &y, sizeof(y));
 
     lseek(sursa, 54, SEEK_SET);
     //aveam nevoie de un tip de un byte care era pozitiv
     unsigned char red, green, blue;
-    while(1) {
-        read(sursa, &blue, 1);
-        read(sursa, &green, 1);
-        read(sursa, &red, 1);
+    while(cnt < x * y) {
+        checkedRead(sursa, &blue, 1);
+        checkedRead(sursa, &green, 1);
+        checkedRead(sursa, &red, 1);
         unsigned char gray = (unsigned char)(0.299 * red + 0.587 * green + 0.114 * blue);
         lseek(sursa, -3, SEEK_CUR);
-        write(sursa, &gray, 1);
-        write(sursa, &gray, 1);
-        write(sursa, &gray, 1);
+        checkedWrite(sursa, &gray, 1);
+        checkedWrite(sursa, &gray, 1);
+        checkedWrite(sursa, &gray, 1);
+        cnt++;
     }
-    close(sursa);
+    checkedClose(sursa);
 }
 
+void closeProcesses(int cnt){
+    int status;
+    int exitStatus;
+    for(int i = 0 ; i < cnt ; i++){
+        int pid = wait(&status);
+        if (WIFEXITED(status) && (exitStatus = WEXITSTATUS(status)) != 3) {
+            printf("S-A INCHEIAT PROCESUL %d CU CODUL %d.\n", pid, WEXITSTATUS(status));
+        } 
+    }
+}
 
 int main(int argc, char *argv[]){
-    if(argc!=3){
+    int cnt = 0;
+    int propCorecte = 0;
+    if(argc!=4){
         printf("Numar nepotrivit de argumente!\n");
         exit(EXIT_FAILURE);
     }
-
+    //verifica daca argv[3] e caracter
+    if(strlen(argv[3]) != 1 || isalpha(argv[3][0])==0){
+        printf("AL TREILEA ARGUMENT NU SATISFACE CONDITIILE DE CARACTER.\n");
+        exit(EXIT_FAILURE);
+    }
     DIR *dir_citire = opendir(argv[1]);
-    DIR *dir_scriere = opendir(argv[1]);
+    //DIR *dir_scriere = opendir(argv[1]);
     if(dir_citire == NULL){
         printf("EROARE LA DESCHIDEREA DIRECTORULUI DAT PENTRU CITIRE.\n");
         exit(EXIT_FAILURE);
     }
-    if(dir_scriere == NULL){
-        printf("EROARE LA DESCHIDEREA DIRECTORULUI DAT PENTRU SCRIERE.\n");
-        exit(EXIT_FAILURE);
-    }
-
     struct dirent *entry;
-    while((entry = readdir(dir_citire))){
+    while((entry = checkedReaddir(dir_citire))){
+        int childGreyscale;
+        int childStatistics;
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
@@ -183,56 +227,106 @@ int main(int argc, char *argv[]){
         strcat(file_path,argv[1]);
         strcat(file_path,"/");
         strcat(file_path,entry->d_name);
-
+        //cale fisier output folderOutput/nume.statistica.txt
         char outputFile_path[100] = "";
         strcat(outputFile_path,argv[2]);
         strcat(outputFile_path,"/");
         strcat(outputFile_path,entry->d_name);
         strcat(outputFile_path,".statistica.txt");
-        
         struct stat file_info;
         if(lstat(file_path, &file_info)==-1){
-            printf("undefined behaviour\n");
+            printf("Undefined behaviour.\n");
+            exit(EXIT_FAILURE);
+        }
+        
+        if(lstat(file_path, &file_info)==-1){
+            printf("No such output dir.\n");
             exit(EXIT_FAILURE);
         }
 
-        int f_id = fork();
-        if(f_id == -1){
+        int statToBash[2], bashToMain[2];
+        if(pipe(statToBash) == -1 || pipe(bashToMain) == -1){
+            printf("EROARE LA DESCHIDEREA PIPE-URILOR.\n");
+            exit(EXIT_FAILURE);
+        }
+        //file data process
+        childStatistics = fork();
+        if(childStatistics < 0){
             printf("EROARE.");
             exit(EXIT_FAILURE); 
-        }else if(f_id == 0){
+        }else if(childStatistics == 0){
             if(S_ISLNK(file_info.st_mode)) {
                 printFileData(file_path,outputFile_path,entry->d_name,1);
-                printNumarLinii(6,file_path);
+                exit(6);
             } else if (S_ISDIR(file_info.st_mode)) {
                 printFileData(file_path,outputFile_path,entry->d_name,2);
-                printNumarLinii(5,file_path); 
+                exit(5);
             } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") == NULL) {
+                checkedClose(bashToMain[0]);
+                checkedClose(bashToMain[1]);
+                checkedClose(statToBash[0]);
+                
                 printFileData(file_path,outputFile_path,entry->d_name,3);
-                printNumarLinii(8,file_path);
+                dup2(statToBash[1],STDOUT_FILENO);
+
+                execlp("cat","cat",file_path, NULL); 
+                perror("EROARE LA TRANSMITEREA CONTINUTULUI.\n");
+                exit(EXIT_FAILURE);
             } else if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL) {
                 printFileData(file_path,outputFile_path,entry->d_name,4);
-                printNumarLinii(10,file_path);
-                greyTones(file_path);
+                exit(10);
             }
+        }else{
+            cnt++;
+        }
 
-
-            //inchidere proces
-            exit(0);
-
-            //proces pentru greyscale
-            if (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL && f_id!=0){
-                int f_id1 = fork();
-                if(f_id1 == -1){
-                    printf("EROARE.");
-                    exit(EXIT_FAILURE); 
-                }else if(f_id1 == 0){
-                    greyTones(file_path);
-                    exit(0);
-                }
+        //greyscale process
+        if (childStatistics > 0 && (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") != NULL)){
+            childGreyscale = fork();
+            if(childGreyscale < 0){
+                printf("EROARE.");
+                exit(EXIT_FAILURE); 
+            } else if(childGreyscale == 0){
+                greyTones(file_path);     
+                exit(3);
+            }else{
+                cnt++;
             }
         }
-    }
-    wait(NULL);
+        //bash command process
+        if (childStatistics > 0 && (S_ISREG(file_info.st_mode) && strstr(file_path, ".bmp") == NULL)){
+            int childBash = fork();
+            if(childBash < 0){
+                printf("EROARE IN PROCESUL DE RULARE A SCRIPTULUI.\n");
+                exit(EXIT_FAILURE);
+            }else if(childBash == 0){
+                checkedClose(statToBash[1]);
+                checkedClose(bashToMain[0]);
+
+                dup2(statToBash[0],STDIN_FILENO);
+                dup2(bashToMain[1], STDOUT_FILENO); 
+                checkedClose(statToBash[0]);
+                //checkedClose(bashToMain[1]);
+
+                execlp("/bin/bash","/bin/bash","bash1.sh",argv[3], (char *)NULL);
+                checkedClose(bashToMain[1]); 
+                perror("EROARE LA EXECUTIA SCRIPTULUI.\n");
+                exit(EXIT_FAILURE);
+            }else if(childBash > 0){
+                checkedClose(statToBash[0]);
+                checkedClose(bashToMain[1]);
+                checkedClose(statToBash[1]);
+                char scriptResult[10];
+                checkedRead(bashToMain[0], scriptResult, sizeof(scriptResult) - 1);    
+                scriptResult[sizeof(scriptResult) - 1] = '\0';
+                propCorecte += atoi(scriptResult);
+                cnt++;
+                checkedClose(bashToMain[0]);
+            }
+        }
+    } 
+    closedir(dir_citire);
+    closeProcesses(cnt);
+    printf("S-au numarat %d propozitii corecte.\n",propCorecte);
     return 0;
 }
